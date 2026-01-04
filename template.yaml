@@ -1,0 +1,63 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Uploading large video files to S3 using pre-signed URLs
+
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: nodejs24.x
+    Architectures:
+      - x86_64
+
+Resources:
+  HelloWorldFunction:   # (Function name kept as-is)
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: upload-url/
+      Handler: app.handler
+      Events:
+        UploadVideoApi:
+          Type: Api
+          Properties:
+            Path: /videos/upload-url
+            Method: post
+      Environment:
+        Variables:
+          VIDEO_BUCKET_NAME: !Ref VideoBucket
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref VideoBucket
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: "es2020"
+        Sourcemap: true
+        EntryPoints:
+          - app.ts
+
+  VideoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub video-upload-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  UploadVideoApi:
+    Description: "API Gateway endpoint URL for uploading videos"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/videos/upload-url"
+
+  UploadLambdaArn:
+    Description: "Lambda ARN for generating pre-signed URLs"
+    Value: !GetAtt HelloWorldFunction.Arn
+
+  VideoBucketName:
+    Description: "S3 bucket used for storing uploaded videos"
+    Value: !Ref VideoBucket
