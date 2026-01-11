@@ -1,47 +1,54 @@
-📦 Uploading Large Files to S3 (Serverless)
-📌 Overview
+Uploading Large Files to S3 (Serverless)
 
-This project demonstrates a scalable backend architecture for uploading large video files (up to 1GB) using AWS Serverless services.
+Overview
 
-Instead of uploading files through the backend (which has size limits), the system uses S3 pre-signed URLs so clients can upload files directly to Amazon S3.
+This project demonstrates a scalable, production-ready backend architecture for uploading large video files (up to 1GB and beyond) using AWS Serverless services.
+
+Instead of uploading files through the backend (which is limited by API Gateway and Lambda constraints), the system uses Amazon S3 Multipart Upload with pre-signed URLs.
+The backend only coordinates the upload, while the client uploads file chunks directly to S3.
 
 This approach is secure, cost-effective, and production-ready.
 
-🏗️ Architecture
+ Architecture
 
-Client (Web / Mobile)
-        |
-        | 1. Request upload URL
-        v
+Client (Web / Mobile / Node.js)
+   |
+   | 1. Initiate multipart upload
+   v
 API Gateway (REST)
-        |
-        v
+   |
+   v
 AWS Lambda (TypeScript)
-        |
-        | 2. Generate pre-signed URL
-        v
+   |
+   | 2. Create multipart upload (S3)
+   v
 Amazon S3
-        ^
-        |
-        | 3. Direct file upload (PUT)
-        |
+   ^
+   |
+   | 3. Upload file chunks directly using presigned URLs
+   |
 Client
+   |
+   | 4. Complete multipart upload
+   v
+AWS Lambda → Amazon S3 (merge parts)
 
-🧰 Tech Stack
+
+  Tech Stack
 
 Language: TypeScript
 
-Backend: AWS Lambda
+Compute: AWS Lambda
 
 API: Amazon API Gateway (REST)
 
-Storage: Amazon S3
+Storage: Amazon S3 (Multipart Upload)
 
-IaC: AWS SAM
+Infrastructure: AWS SAM
 
-Testing: Jest (with AWS SDK mocks)
+Testing: Jest (AWS SDK mocked)
 
-📁 Project Structure
+Project Structure
 
 Uploading-large-file-to-S3/
 │
@@ -58,69 +65,156 @@ Uploading-large-file-to-S3/
     ├── tsconfig.json
     └── jest.config.ts
 
-🔁 API Flow
-1️⃣ Request a Pre-Signed Upload URL
+Multipart Upload API Flow
+ Initiate Multipart Upload
 
 Endpoint
 
-POST /videos/upload-url
+POST http:/{aws}/{satge}/videos/multipart/initiate
 
 
 Request Body
 
 {
   "fileName": "video.mp4",
-  "fileType": "video/mp4",
-  "fileSize": 500000000
+  "fileType": "video/mp4"
 }
 
-2️⃣ API Response
+
+Response
+
 {
-  "message": "Pre-signed URL generated successfully",
-  "uploadUrl": "https://s3.amazonaws.com/....",
+  "uploadId": "abc123",
   "key": "videos/1700000000-video.mp4"
 }
 
-3️⃣ Upload File Directly to S3
-curl -X PUT "<UPLOAD_URL>" \
-  -H "Content-Type: video/mp4" \
-  --upload-file "/path/to/video.mp4"
+
+Creates a multipart upload session in S3.
+Get Pre-Signed URL for a Part
+
+Endpoint
+
+GET /videos/multipart/{uploadId}/{partNumber}/url?key=...
 
 
-✅ File appears in S3 bucket after upload.
+Response
 
-🔐 Security Measures
+{
+  "url": "https://s3.amazonaws.com/..."
+}
+
+
+One URL per part
+
+Generated on demand
+
+Expires in 15 minutes
+
+ Upload File Chunks Directly to S3
+
+The client:
+
+Splits the file into 5 MB chunks
+
+Uploads each chunk using PUT to S3
+
+Example:
+
+curl -X PUT "<PRESIGNED_URL>" \
+  -H "Content-Type: application/octet-stream" \
+  --upload-file chunk.bin
+
+
+ No Lambda or API Gateway involved during file transfer.
+
+ Complete Multipart Upload
+
+Endpoint
+
+POST /videos/multipart/{uploadId}/complete
+
+
+Request Body
+
+{
+  "uploadId": "abc123",
+  "key": "videos/1700000000-video.mp4",
+  "parts": [
+    { "PartNumber": 1, "ETag": "\"etag1\"" },
+    { "PartNumber": 2, "ETag": "\"etag2\"" }
+  ]
+}
+
+
+S3 merges all uploaded parts into one final video file.
+
+Result
+
+Single video file stored in S3
+
+Correct file size
+
+Fully playable
+
+Supports uploads well beyond 1GB
+
+Security Measures
 
 Pre-signed URL expiry: 15 minutes
 
-File size validation (max 1GB)
+File never passes through Lambda
 
 Private S3 bucket (no public access)
 
 IAM permissions scoped to a single bucket
 
-🧪 Testing
+Controlled uploads via multipart sessions
+
+Testing
 
 Unit tests written using Jest
 
 AWS SDK calls mocked
 
+Success and failure cases covered
+
 100% code coverage
 
-Run tests
+Run tests:
+
 cd upload-url
 npm test
 
-🚀 Local Development
+Local Development
 sam build
 sam local start-api
 
-📦 Large File Upload to S3 (this project)
+Real-World Validation
 
-Both projects demonstrate real-world serverless backend design using AWS.
+Successfully tested with a ~385 MB video file
 
-👤 Author
+Upload performed using a TypeScript client
+
+Multipart upload verified in Amazon S3
+
+Upload duration exceeded 15 minutes safely, without Lambda timeout issues
+
+Key Design Principle
+
+Lambda orchestrates the multipart upload,
+while the client uploads file chunks directly to S3 using pre-signed URLs.
+
+This avoids:
+
+API Gateway size limits
+
+Lambda timeout constraints
+
+High backend compute costs
+
+
+Author
 
 G. Naveen Kumar
-B.Tech – Computer Science & Engineering
 Serverless | AWS | TypeScript | Backend Development
+

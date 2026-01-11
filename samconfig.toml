@@ -19,7 +19,6 @@ confirm_changeset = true
 resolve_s3 = true
 stack_name = "uploading-large-video-to-S3-GNK"
 s3_prefix = "uploading-large-video-to-S3-GNK"
-region = "us-east-1"
 image_repositories = []
 
 [default.package.parameters]
